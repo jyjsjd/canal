@@ -1,12 +1,16 @@
 package com.alibaba.otter.canal.instance.core;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 public class CanalMQConfig {
 
-    private String  topic;
-    private Integer partition;
-    private Integer partitionsNum;
-    private String  partitionHash;
-    private String  dynamicTopic;
+    private String                       topic;
+    private Integer                      partition;
+    private Integer                      partitionsNum;
+    private String                       partitionHash;
+
+    private volatile Map<String, String> partitionHashProperties;
 
     public String getTopic() {
         return topic;
@@ -40,11 +44,25 @@ public class CanalMQConfig {
         this.partitionHash = partitionHash;
     }
 
-    public String getDynamicTopic() {
-        return dynamicTopic;
-    }
-
-    public void setDynamicTopic(String dynamicTopic) {
-        this.dynamicTopic = dynamicTopic;
+    public Map<String, String> getPartitionHashProperties() {
+        if (partitionHashProperties == null) {
+            synchronized (CanalMQConfig.class) {
+                if (partitionHashProperties == null) {
+                    if (partitionHash != null) {
+                        partitionHashProperties = new LinkedHashMap<>();
+                        String[] items = partitionHash.split(",");
+                        for (String item : items) {
+                            int i = item.indexOf(":");
+                            if (i > -1) {
+                                String dbTable = item.substring(0, i).trim();
+                                String pk = item.substring(i + 1).trim();
+                                partitionHashProperties.put(dbTable, pk);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return partitionHashProperties;
     }
 }

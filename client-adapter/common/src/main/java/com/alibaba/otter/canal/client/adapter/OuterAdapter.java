@@ -2,7 +2,6 @@ package com.alibaba.otter.canal.client.adapter;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 import com.alibaba.otter.canal.client.adapter.support.Dml;
 import com.alibaba.otter.canal.client.adapter.support.EtlResult;
@@ -22,9 +21,8 @@ public interface OuterAdapter {
      * 外部适配器初始化接口
      *
      * @param configuration 外部适配器配置信息
-     * @param envProperties 环境变量的配置属性
      */
-    void init(OuterAdapterConfig configuration, Properties envProperties);
+    void init(OuterAdapterConfig configuration);
 
     /**
      * 往适配器中同步数据
@@ -40,7 +38,7 @@ public interface OuterAdapter {
 
     /**
      * Etl操作
-     *
+     * 
      * @param task 任务名, 对应配置名
      * @param params etl筛选条件
      */
@@ -50,7 +48,7 @@ public interface OuterAdapter {
 
     /**
      * 计算总数
-     *
+     * 
      * @param task 任务名, 对应配置名
      * @return 总数
      */
@@ -60,7 +58,7 @@ public interface OuterAdapter {
 
     /**
      * 通过task获取对应的destination
-     *
+     * 
      * @param task 任务名, 对应配置名
      * @return destination
      */

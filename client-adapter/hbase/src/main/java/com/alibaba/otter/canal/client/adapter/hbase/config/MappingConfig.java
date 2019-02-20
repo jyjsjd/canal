@@ -14,8 +14,6 @@ public class MappingConfig {
 
     private String       outerAdapterKey; // adapter key
 
-    private String       groupId;         // groupId
-
     private String       destination;     // canal实例或MQ的topic
 
     private HbaseMapping hbaseMapping;    // hbase映射配置
@@ -26,14 +24,6 @@ public class MappingConfig {
 
     public void setDataSourceKey(String dataSourceKey) {
         this.dataSourceKey = dataSourceKey;
-    }
-
-    public String getGroupId() {
-        return groupId;
-    }
-
-    public void setGroupId(String groupId) {
-        this.groupId = groupId;
     }
 
     public String getOuterAdapterKey() {

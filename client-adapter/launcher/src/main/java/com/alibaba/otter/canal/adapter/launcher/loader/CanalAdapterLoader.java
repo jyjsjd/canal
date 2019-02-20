@@ -2,7 +2,10 @@ package com.alibaba.otter.canal.adapter.launcher.loader;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -10,12 +13,7 @@ import java.util.concurrent.Future;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.env.EnumerablePropertySource;
-import org.springframework.core.env.Environment;
-import org.springframework.core.env.PropertySource;
-import org.springframework.core.env.StandardEnvironment;
 
-import com.alibaba.otter.canal.adapter.launcher.config.SpringContext;
 import com.alibaba.otter.canal.client.adapter.OuterAdapter;
 import com.alibaba.otter.canal.client.adapter.support.CanalClientConfig;
 import com.alibaba.otter.canal.client.adapter.support.ExtensionLoader;
@@ -64,7 +62,7 @@ public class CanalAdapterLoader {
                 for (CanalClientConfig.Group connectorGroup : canalAdapter.getGroups()) {
                     List<OuterAdapter> canalOutConnectors = new ArrayList<>();
                     for (OuterAdapterConfig c : connectorGroup.getOuterAdapters()) {
-                        loadAdapter(c, canalOutConnectors);
+                        loadConnector(c, canalOutConnectors);
                     }
                     canalOuterAdapterGroups.add(canalOutConnectors);
                 }
@@ -93,7 +91,7 @@ public class CanalAdapterLoader {
                     List<List<OuterAdapter>> canalOuterAdapterGroups = new ArrayList<>();
                     List<OuterAdapter> canalOuterAdapters = new ArrayList<>();
                     for (OuterAdapterConfig config : group.getOuterAdapters()) {
-                        loadAdapter(config, canalOuterAdapters);
+                        loadConnector(config, canalOuterAdapters);
                     }
                     canalOuterAdapterGroups.add(canalOuterAdapters);
 
@@ -105,8 +103,8 @@ public class CanalAdapterLoader {
                         canalClientConfig.getFlatMessage());
                     canalMQWorker.put(canalAdapter.getInstance() + "-kafka-" + group.getGroupId(), canalKafkaWorker);
                     canalKafkaWorker.start();
-                    logger.info("Start adapter for canal-client mq topic: {} succeed",
-                        canalAdapter.getInstance() + "-" + group.getGroupId());
+                    logger.info("Start adapter for canal-client mq topic: {} succeed", canalAdapter.getInstance() + "-"
+                                                                                       + group.getGroupId());
                 }
             }
         } else if ("rocketMQ".equalsIgnoreCase(canalClientConfig.getMode())) {
@@ -116,7 +114,7 @@ public class CanalAdapterLoader {
                     List<List<OuterAdapter>> canalOuterAdapterGroups = new ArrayList<>();
                     List<OuterAdapter> canalOuterAdapters = new ArrayList<>();
                     for (OuterAdapterConfig config : group.getOuterAdapters()) {
-                        loadAdapter(config, canalOuterAdapters);
+                        loadConnector(config, canalOuterAdapters);
                     }
                     canalOuterAdapterGroups.add(canalOuterAdapters);
                     CanalAdapterRocketMQWorker rocketMQWorker = new CanalAdapterRocketMQWorker(canalClientConfig,
@@ -130,14 +128,14 @@ public class CanalAdapterLoader {
                     canalMQWorker.put(canalAdapter.getInstance() + "-rocketmq-" + group.getGroupId(), rocketMQWorker);
                     rocketMQWorker.start();
 
-                    logger.info("Start adapter for canal-client mq topic: {} succeed",
-                        canalAdapter.getInstance() + "-" + group.getGroupId());
+                    logger.info("Start adapter for canal-client mq topic: {} succeed", canalAdapter.getInstance() + "-"
+                                                                                       + group.getGroupId());
                 }
             }
         }
     }
 
-    private void loadAdapter(OuterAdapterConfig config, List<OuterAdapter> canalOutConnectors) {
+    private void loadConnector(OuterAdapterConfig config, List<OuterAdapter> canalOutConnectors) {
         try {
             OuterAdapter adapter;
             adapter = loader.getExtension(config.getName(), StringUtils.trimToEmpty(config.getKey()));
@@ -145,23 +143,7 @@ public class CanalAdapterLoader {
             ClassLoader cl = Thread.currentThread().getContextClassLoader();
             // 替换ClassLoader
             Thread.currentThread().setContextClassLoader(adapter.getClass().getClassLoader());
-            Environment env = (Environment) SpringContext.getBean(Environment.class);
-            Properties evnProperties = null;
-            if (env instanceof StandardEnvironment) {
-                evnProperties = new Properties();
-                for (PropertySource<?> propertySource : ((StandardEnvironment) env).getPropertySources()) {
-                    if (propertySource instanceof EnumerablePropertySource) {
-                        String[] names = ((EnumerablePropertySource<?>) propertySource).getPropertyNames();
-                        for (String name : names) {
-                            Object val = propertySource.getProperty(name);
-                            if (val != null) {
-                                evnProperties.put(name, val);
-                            }
-                        }
-                    }
-                }
-            }
-            adapter.init(config, evnProperties);
+            adapter.init(config);
             Thread.currentThread().setContextClassLoader(cl);
             canalOutConnectors.add(adapter);
             logger.info("Load canal adapter: {} succeed", config.getName());

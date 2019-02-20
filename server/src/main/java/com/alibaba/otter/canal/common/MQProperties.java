@@ -1,6 +1,6 @@
 package com.alibaba.otter.canal.common;
 
-import java.util.Properties;
+import java.util.Map;
 
 /**
  * kafka 配置项
@@ -10,32 +10,29 @@ import java.util.Properties;
  */
 public class MQProperties {
 
-    private String     servers                = "127.0.0.1:6667";
-    private int        retries                = 0;
-    private int        batchSize              = 16384;
-    private int        lingerMs               = 1;
-    private int        maxRequestSize         = 1048576;
-    private long       bufferMemory           = 33554432L;
-    private boolean    filterTransactionEntry = true;
-    private String     producerGroup          = "Canal-Producer";
-    private int        canalBatchSize         = 50;
-    private Long       canalGetTimeout        = 100L;
-    private boolean    flatMessage            = true;
-    private String     compressionType        = "none";
-    private String     acks                   = "all";
-    private String     aliyunAccessKey        = "";
-    private String     aliyunSecretKey        = "";
-    private boolean    transaction            = false;           // 是否开启事务
-    private Properties properties             = new Properties();
+    private String  servers                = "127.0.0.1:6667";
+    private int     retries                = 0;
+    private int     batchSize              = 16384;
+    private int     lingerMs               = 1;
+    private int     maxRequestSize         = 1048576;
+    private long    bufferMemory           = 33554432L;
+    private boolean filterTransactionEntry = true;
+    private String  producerGroup          = "Canal-Producer";
+    private int     canalBatchSize         = 50;
+    private Long    canalGetTimeout        = 100L;
+    private boolean flatMessage            = true;
+    private String  compressionType        = "none";
+    private String  acks                   = "all";
+    private String  aliyunAccessKey        = "";
+    private String  aliyunSecretKey        = "";
 
     public static class CanalDestination {
 
-        private String  canalDestination;
-        private String  topic;
-        private Integer partition;
-        private Integer partitionsNum;
-        private String  partitionHash;
-        private String  dynamicTopic;
+        private String              canalDestination;
+        private String              topic;
+        private Integer             partition;
+        private Integer             partitionsNum;
+        private Map<String, String> partitionHash;
 
         public String getCanalDestination() {
             return canalDestination;
@@ -69,20 +66,12 @@ public class MQProperties {
             this.partitionsNum = partitionsNum;
         }
 
-        public String getPartitionHash() {
+        public Map<String, String> getPartitionHash() {
             return partitionHash;
         }
 
-        public void setPartitionHash(String partitionHash) {
+        public void setPartitionHash(Map<String, String> partitionHash) {
             this.partitionHash = partitionHash;
-        }
-
-        public String getDynamicTopic() {
-            return dynamicTopic;
-        }
-
-        public void setDynamicTopic(String dynamicTopic) {
-            this.dynamicTopic = dynamicTopic;
         }
     }
 
@@ -197,28 +186,11 @@ public class MQProperties {
     public void setAliyunSecretKey(String aliyunSecretKey) {
         this.aliyunSecretKey = aliyunSecretKey;
     }
-
     public int getMaxRequestSize() {
         return maxRequestSize;
     }
 
     public void setMaxRequestSize(int maxRequestSize) {
         this.maxRequestSize = maxRequestSize;
-    }
-
-    public boolean getTransaction() {
-        return transaction;
-    }
-
-    public void setTransaction(boolean transaction) {
-        this.transaction = transaction;
-    }
-
-    public Properties getProperties() {
-        return properties;
-    }
-
-    public void setProperties(Properties properties) {
-        this.properties = properties;
     }
 }

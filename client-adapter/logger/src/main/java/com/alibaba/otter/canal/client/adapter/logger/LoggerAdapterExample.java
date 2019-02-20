@@ -1,7 +1,6 @@
 package com.alibaba.otter.canal.client.adapter.logger;
 
 import java.util.List;
-import java.util.Properties;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,7 +25,7 @@ public class LoggerAdapterExample implements OuterAdapter {
     private Logger logger = LoggerFactory.getLogger(this.getClass());
 
     @Override
-    public void init(OuterAdapterConfig configuration, Properties envProperties) {
+    public void init(OuterAdapterConfig configuration) {
 
     }
 

@@ -9,7 +9,6 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import org.apache.commons.lang.StringUtils;
 import org.joda.time.DateTime;
 
 import com.alibaba.otter.canal.client.adapter.rdb.config.MappingConfig;
@@ -22,10 +21,7 @@ public class SyncUtil {
 
     public static Map<String, String> getColumnsMap(MappingConfig.DbMapping dbMapping, Collection<String> columns) {
         Map<String, String> columnsMap;
-        if (dbMapping.getMapAll()) {
-            if (dbMapping.getAllMapColumns() != null) {
-                return dbMapping.getAllMapColumns();
-            }
+        if (dbMapping.isMapAll()) {
             columnsMap = new LinkedHashMap<>();
             for (String srcColumn : columns) {
                 boolean flag = true;
@@ -42,7 +38,6 @@ public class SyncUtil {
                     columnsMap.put(srcColumn, srcColumn);
                 }
             }
-            dbMapping.setAllMapColumns(columnsMap);
         } else {
             columnsMap = dbMapping.getTargetColumns();
         }
@@ -79,14 +74,14 @@ public class SyncUtil {
             case Types.LONGVARCHAR:
                 if (value instanceof String) {
                     pstmt.setString(i, (String) value);
-                } else if (value == null) {
-                    pstmt.setNull(i, type);
                 } else {
                     pstmt.setString(i, value.toString());
                 }
                 break;
             case Types.TINYINT:
-                 if (value instanceof Number) {
+                if (value instanceof Byte || value instanceof Short || value instanceof Integer) {
+                    pstmt.setByte(i, (byte) value);
+                } else if (value instanceof Number) {
                     pstmt.setByte(i, ((Number) value).byteValue());
                 } else if (value instanceof String) {
                     pstmt.setByte(i, Byte.parseByte((String) value));
@@ -95,7 +90,9 @@ public class SyncUtil {
                 }
                 break;
             case Types.SMALLINT:
-                if (value instanceof Number) {
+                if (value instanceof Byte || value instanceof Short || value instanceof Integer) {
+                    pstmt.setShort(i, (short) value);
+                } else if (value instanceof Number) {
                     pstmt.setShort(i, ((Number) value).shortValue());
                 } else if (value instanceof String) {
                     pstmt.setShort(i, Short.parseShort((String) value));
@@ -104,7 +101,10 @@ public class SyncUtil {
                 }
                 break;
             case Types.INTEGER:
-                if (value instanceof Number) {
+                if (value instanceof Byte || value instanceof Short || value instanceof Integer
+                    || value instanceof Long) {
+                    pstmt.setInt(i, (int) value);
+                } else if (value instanceof Number) {
                     pstmt.setInt(i, ((Number) value).intValue());
                 } else if (value instanceof String) {
                     pstmt.setInt(i, Integer.parseInt((String) value));
@@ -113,7 +113,10 @@ public class SyncUtil {
                 }
                 break;
             case Types.BIGINT:
-                if (value instanceof Number) {
+                if (value instanceof Byte || value instanceof Short || value instanceof Integer
+                    || value instanceof Long) {
+                    pstmt.setLong(i, (long) value);
+                } else if (value instanceof Number) {
                     pstmt.setLong(i, ((Number) value).longValue());
                 } else if (value instanceof String) {
                     pstmt.setLong(i, Long.parseLong((String) value));
@@ -126,25 +129,26 @@ public class SyncUtil {
                 if (value instanceof BigDecimal) {
                     pstmt.setBigDecimal(i, (BigDecimal) value);
                 } else if (value instanceof Byte) {
-                    pstmt.setInt(i, ((Byte) value).intValue());
+                    pstmt.setInt(i, (int) value);
                 } else if (value instanceof Short) {
-                    pstmt.setInt(i, ((Short) value).intValue());
+                    pstmt.setInt(i, (int) value);
                 } else if (value instanceof Integer) {
-                    pstmt.setInt(i, (Integer) value);
+                    pstmt.setInt(i, (int) value);
                 } else if (value instanceof Long) {
-                    pstmt.setLong(i, (Long) value);
+                    pstmt.setLong(i, (long) value);
                 } else if (value instanceof Float) {
                     pstmt.setBigDecimal(i, new BigDecimal((float) value));
                 } else if (value instanceof Double) {
                     pstmt.setBigDecimal(i, new BigDecimal((double) value));
-                } else if (value != null) {
-                    pstmt.setBigDecimal(i, new BigDecimal(value.toString()));
                 } else {
-                    pstmt.setNull(i, type);
+                    pstmt.setBigDecimal(i, new BigDecimal(value.toString()));
                 }
                 break;
             case Types.REAL:
-                if (value instanceof Number) {
+                if (value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long
+                    || value instanceof Float || value instanceof Double) {
+                    pstmt.setFloat(i, (float) value);
+                } else if (value instanceof Number) {
                     pstmt.setFloat(i, ((Number) value).floatValue());
                 } else if (value instanceof String) {
                     pstmt.setFloat(i, Float.parseFloat((String) value));
@@ -154,7 +158,10 @@ public class SyncUtil {
                 break;
             case Types.FLOAT:
             case Types.DOUBLE:
-                if (value instanceof Number) {
+                if (value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long
+                    || value instanceof Float || value instanceof Double) {
+                    pstmt.setDouble(i, (double) value);
+                } else if (value instanceof Number) {
                     pstmt.setDouble(i, ((Number) value).doubleValue());
                 } else if (value instanceof String) {
                     pstmt.setDouble(i, Double.parseDouble((String) value));
@@ -241,14 +248,5 @@ public class SyncUtil {
             default:
                 pstmt.setObject(i, value, type);
         }
-    }
-
-    public static String getDbTableName(MappingConfig.DbMapping dbMapping) {
-        String result = "";
-        if (StringUtils.isNotEmpty(dbMapping.getTargetDb())) {
-            result += dbMapping.getTargetDb() + ".";
-        }
-        result += dbMapping.getTargetTable();
-        return result;
     }
 }

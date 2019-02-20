@@ -28,8 +28,7 @@ public class CanalAdapterKafkaWorker extends AbstractCanalAdapterWorker {
         super(canalOuterAdapters);
         this.canalClientConfig = canalClientConfig;
         this.topic = topic;
-        super.canalDestination = topic;
-        super.groupId = groupId;
+        this.canalDestination = topic;
         this.flatMessage = flatMessage;
         this.connector = new KafkaCanalConnector(bootstrapServers,
             topic,
@@ -42,16 +41,10 @@ public class CanalAdapterKafkaWorker extends AbstractCanalAdapterWorker {
 
     @Override
     protected void process() {
-        while (!running) {
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                // ignore
-            }
-        }
+        while (!running)
+            ;
         ExecutorService workerExecutor = Executors.newSingleThreadExecutor();
-        int retry = canalClientConfig.getRetries() == null
-                    || canalClientConfig.getRetries() == 0 ? 1 : canalClientConfig.getRetries();
+        int retry = canalClientConfig.getRetries() == null || canalClientConfig.getRetries() == 0 ? 1 : canalClientConfig.getRetries();
         long timeout = canalClientConfig.getTimeout() == null ? 30000 : canalClientConfig.getTimeout(); // 默认超时30秒
 
         while (running) {
@@ -68,17 +61,7 @@ public class CanalAdapterKafkaWorker extends AbstractCanalAdapterWorker {
                         connector.disconnect();
                         break;
                     }
-                    if (retry == -1) {
-                        retry = Integer.MAX_VALUE;
-                    }
-                    for (int i = 0; i < retry; i++) {
-                        if (!running) {
-                            break;
-                        }
-                        if (mqWriteOutData(retry, timeout, i, flatMessage, connector, workerExecutor)) {
-                            break;
-                        }
-                    }
+                    mqWriteOutData(retry, timeout, flatMessage, connector, workerExecutor);
                 }
             } catch (Exception e) {
                 logger.error(e.getMessage(), e);

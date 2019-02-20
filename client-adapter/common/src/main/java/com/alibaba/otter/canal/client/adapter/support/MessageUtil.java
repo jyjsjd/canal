@@ -1,6 +1,11 @@
 package com.alibaba.otter.canal.client.adapter.support;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import com.alibaba.otter.canal.protocol.CanalEntry;
 import com.alibaba.otter.canal.protocol.FlatMessage;
@@ -14,7 +19,7 @@ import com.alibaba.otter.canal.protocol.Message;
  */
 public class MessageUtil {
 
-    public static List<Dml> parse4Dml(String destination, String groupId, Message message) {
+    public static List<Dml> parse4Dml(String destination, Message message) {
         if (message == null) {
             return null;
         }
@@ -38,12 +43,10 @@ public class MessageUtil {
 
             final Dml dml = new Dml();
             dml.setDestination(destination);
-            dml.setGroupId(groupId);
             dml.setDatabase(entry.getHeader().getSchemaName());
             dml.setTable(entry.getHeader().getTableName());
             dml.setType(eventType.toString());
             dml.setEs(entry.getHeader().getExecuteTime());
-            dml.setIsDdl(rowChange.getIsDdl());
             dml.setTs(System.currentTimeMillis());
             dml.setSql(rowChange.getSql());
             dmls.add(dml);
@@ -52,8 +55,6 @@ public class MessageUtil {
 
             if (!rowChange.getIsDdl()) {
                 Set<String> updateSet = new HashSet<>();
-                dml.setPkNames(new ArrayList<>());
-                int i = 0;
                 for (CanalEntry.RowData rowData : rowChange.getRowDatasList()) {
                     if (eventType != CanalEntry.EventType.INSERT && eventType != CanalEntry.EventType.UPDATE
                         && eventType != CanalEntry.EventType.DELETE) {
@@ -70,11 +71,6 @@ public class MessageUtil {
                     }
 
                     for (CanalEntry.Column column : columns) {
-                        if (i == 0) {
-                            if (column.getIsKey()) {
-                                dml.getPkNames().add(column.getName());
-                            }
-                        }
                         row.put(column.getName(),
                             JdbcTypeUtil.typeConvert(column.getName(),
                                 column.getValue(),
@@ -105,8 +101,6 @@ public class MessageUtil {
                             old.add(rowOld);
                         }
                     }
-
-                    i++;
                 }
                 if (!data.isEmpty()) {
                     dml.setData(data);
@@ -120,10 +114,10 @@ public class MessageUtil {
         return dmls;
     }
 
-    public static List<Dml> flatMessage2Dml(String destination, String groupId, List<FlatMessage> flatMessages) {
+    public static List<Dml> flatMessage2Dml(String destination, List<FlatMessage> flatMessages) {
         List<Dml> dmls = new ArrayList<Dml>(flatMessages.size());
         for (FlatMessage flatMessage : flatMessages) {
-            Dml dml = flatMessage2Dml(destination, groupId, flatMessage);
+            Dml dml = flatMessage2Dml(destination, flatMessage);
             if (dml != null) {
                 dmls.add(dml);
             }
@@ -132,24 +126,21 @@ public class MessageUtil {
         return dmls;
     }
 
-    public static Dml flatMessage2Dml(String destination, String groupId, FlatMessage flatMessage) {
+    public static Dml flatMessage2Dml(String destination, FlatMessage flatMessage) {
         if (flatMessage == null) {
             return null;
         }
         Dml dml = new Dml();
         dml.setDestination(destination);
-        dml.setGroupId(groupId);
         dml.setDatabase(flatMessage.getDatabase());
         dml.setTable(flatMessage.getTable());
-        dml.setPkNames(flatMessage.getPkNames());
-        dml.setIsDdl(flatMessage.getIsDdl());
         dml.setType(flatMessage.getType());
         dml.setTs(flatMessage.getTs());
         dml.setEs(flatMessage.getEs());
         dml.setSql(flatMessage.getSql());
-        // if (flatMessage.getSqlType() == null || flatMessage.getMysqlType() == null) {
-        // throw new RuntimeException("SqlType or mysqlType is null");
-        // }
+        if (flatMessage.getSqlType() == null || flatMessage.getMysqlType() == null) {
+            throw new RuntimeException("SqlType or mysqlType is null");
+        }
         List<Map<String, String>> data = flatMessage.getData();
         if (data != null) {
             dml.setData(changeRows(data, flatMessage.getSqlType(), flatMessage.getMysqlType()));

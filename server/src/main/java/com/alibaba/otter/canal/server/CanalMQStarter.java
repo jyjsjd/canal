@@ -7,7 +7,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,9 +20,9 @@ import com.alibaba.otter.canal.spi.CanalMQProducer;
 
 public class CanalMQStarter {
 
-    private static final Logger          logger         = LoggerFactory.getLogger(CanalMQStarter.class);
+    private static final Logger          logger       = LoggerFactory.getLogger(CanalMQStarter.class);
 
-    private volatile boolean             running        = false;
+    private volatile boolean             running      = false;
 
     private ExecutorService              executorService;
 
@@ -33,9 +32,7 @@ public class CanalMQStarter {
 
     private CanalServerWithEmbedded      canalServer;
 
-    private Map<String, CanalMQRunnable> canalMQWorks   = new ConcurrentHashMap<>();
-
-    private static Thread                shutdownThread = null;
+    private Map<String, CanalMQRunnable> canalMQWorks = new ConcurrentHashMap<>();
 
     public CanalMQStarter(CanalMQProducer canalMQProducer){
         this.canalMQProducer = canalMQProducer;
@@ -63,19 +60,15 @@ public class CanalMQStarter {
             // 对应每个instance启动一个worker线程
             executorService = Executors.newCachedThreadPool();
             logger.info("## start the MQ workers.");
-
-            String[] destinations = StringUtils.split(System.getProperty("canal.destinations"), ",");
-            for (String destination : destinations) {
-                destination = destination.trim();
-                CanalMQRunnable canalMQRunnable = new CanalMQRunnable(destination);
-                canalMQWorks.put(destination, canalMQRunnable);
+            for (final CanalInstance canalInstance : canalServer.getCanalInstances().values()) {
+                CanalMQRunnable canalMQRunnable = new CanalMQRunnable(canalInstance);
+                canalMQWorks.put(canalInstance.getDestination(), canalMQRunnable);
                 executorService.execute(canalMQRunnable);
             }
 
             running = true;
             logger.info("## the MQ workers is running now ......");
-
-            shutdownThread = new Thread() {
+            Runtime.getRuntime().addShutdownHook(new Thread() {
 
                 public void run() {
                     try {
@@ -90,25 +83,11 @@ public class CanalMQStarter {
                     }
                 }
 
-            };
+            });
 
-            Runtime.getRuntime().addShutdownHook(shutdownThread);
         } catch (Throwable e) {
             logger.error("## Something goes wrong when starting up the canal MQ workers:", e);
-        }
-    }
-
-    public synchronized void destroy() {
-        running = false;
-        if (executorService != null) {
-            executorService.shutdown();
-        }
-        if (canalMQProducer != null) {
-            canalMQProducer.stop();
-        }
-        if (shutdownThread != null) {
-            Runtime.getRuntime().removeShutdownHook(shutdownThread);
-            shutdownThread = null;
+            System.exit(0);
         }
     }
 
@@ -116,7 +95,7 @@ public class CanalMQStarter {
         CanalInstance canalInstance = canalServer.getCanalInstances().get(destination);
         if (canalInstance != null) {
             stopDestination(destination);
-            CanalMQRunnable canalMQRunnable = new CanalMQRunnable(destination);
+            CanalMQRunnable canalMQRunnable = new CanalMQRunnable(canalInstance);
             canalMQWorks.put(canalInstance.getDestination(), canalMQRunnable);
             executorService.execute(canalMQRunnable);
             logger.info("## Start the MQ work of destination:" + destination);
@@ -132,16 +111,15 @@ public class CanalMQStarter {
         }
     }
 
-    private void worker(String destination, AtomicBoolean destinationRunning) {
+    private void worker(MQProperties.CanalDestination destination, AtomicBoolean destinationRunning) {
         while (!running || !destinationRunning.get())
             ;
-        logger.info("## start the MQ producer: {}.", destination);
+        logger.info("## start the MQ producer: {}.", destination.getCanalDestination());
 
-        final ClientIdentity clientIdentity = new ClientIdentity(destination, (short) 1001, "");
+        final ClientIdentity clientIdentity = new ClientIdentity(destination.getCanalDestination(), (short) 1001, "");
         while (running && destinationRunning.get()) {
             try {
-                CanalInstance canalInstance = canalServer.getCanalInstances().get(destination);
-                if (canalInstance == null) {
+                if (!canalServer.getCanalInstances().containsKey(clientIdentity.getDestination())) {
                     try {
                         Thread.sleep(3000);
                     } catch (InterruptedException e) {
@@ -149,17 +127,8 @@ public class CanalMQStarter {
                     }
                     continue;
                 }
-                MQProperties.CanalDestination canalDestination = new MQProperties.CanalDestination();
-                canalDestination.setCanalDestination(destination);
-                CanalMQConfig mqConfig = canalInstance.getMqConfig();
-                canalDestination.setTopic(mqConfig.getTopic());
-                canalDestination.setPartition(mqConfig.getPartition());
-                canalDestination.setDynamicTopic(mqConfig.getDynamicTopic());
-                canalDestination.setPartitionsNum(mqConfig.getPartitionsNum());
-                canalDestination.setPartitionHash(mqConfig.getPartitionHash());
-
                 canalServer.subscribe(clientIdentity);
-                logger.info("## the MQ producer: {} is running now ......", destination);
+                logger.info("## the MQ producer: {} is running now ......", destination.getCanalDestination());
 
                 Long getTimeout = properties.getCanalGetTimeout();
                 int getBatchSize = properties.getCanalBatchSize();
@@ -176,7 +145,7 @@ public class CanalMQStarter {
                     try {
                         int size = message.isRaw() ? message.getRawEntries().size() : message.getEntries().size();
                         if (batchId != -1 && size != 0) {
-                            canalMQProducer.send(canalDestination, message, new CanalMQProducer.Callback() {
+                            canalMQProducer.send(destination, message, new CanalMQProducer.Callback() {
 
                                 @Override
                                 public void commit() {
@@ -208,16 +177,23 @@ public class CanalMQStarter {
 
     private class CanalMQRunnable implements Runnable {
 
-        private String destination;
+        private CanalInstance canalInstance;
 
-        CanalMQRunnable(String destination){
-            this.destination = destination;
+        public CanalMQRunnable(CanalInstance canalInstance){
+            this.canalInstance = canalInstance;
         }
 
         private AtomicBoolean running = new AtomicBoolean(true);
 
         @Override
         public void run() {
+            MQProperties.CanalDestination destination = new MQProperties.CanalDestination();
+            destination.setCanalDestination(canalInstance.getDestination());
+            CanalMQConfig mqConfig = canalInstance.getMqConfig();
+            destination.setTopic(mqConfig.getTopic());
+            destination.setPartition(mqConfig.getPartition());
+            destination.setPartitionsNum(mqConfig.getPartitionsNum());
+            destination.setPartitionHash(mqConfig.getPartitionHashProperties());
             worker(destination, running);
         }
 

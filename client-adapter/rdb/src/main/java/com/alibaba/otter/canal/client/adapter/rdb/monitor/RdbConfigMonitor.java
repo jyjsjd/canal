@@ -15,13 +15,12 @@ import org.yaml.snakeyaml.Yaml;
 
 import com.alibaba.otter.canal.client.adapter.rdb.RdbAdapter;
 import com.alibaba.otter.canal.client.adapter.rdb.config.MappingConfig;
-import com.alibaba.otter.canal.client.adapter.rdb.config.MirrorDbConfig;
 import com.alibaba.otter.canal.client.adapter.support.MappingConfigsLoader;
 import com.alibaba.otter.canal.client.adapter.support.Util;
 
 public class RdbConfigMonitor {
 
-    private static final Logger   logger      = LoggerFactory.getLogger(RdbConfigMonitor.class);
+    private static final Logger   logger = LoggerFactory.getLogger(RdbConfigMonitor.class);
 
     private static final String   adapterName = "rdb";
 
@@ -84,12 +83,7 @@ public class RdbConfigMonitor {
             try {
                 if (rdbAdapter.getRdbMapping().containsKey(file.getName())) {
                     // 加载配置文件
-                    String configContent = MappingConfigsLoader
-                        .loadConfig(adapterName + File.separator + file.getName());
-                    if (configContent == null) {
-                        onFileDelete(file);
-                        return;
-                    }
+                    String configContent = MappingConfigsLoader.loadConfig(adapterName + File.separator + file.getName());
                     MappingConfig config = new Yaml().loadAs(configContent, MappingConfig.class);
                     config.validate();
                     if ((key == null && config.getOuterAdapterKey() == null)
@@ -124,44 +118,22 @@ public class RdbConfigMonitor {
             }
         }
 
-        private void addConfigToCache(File file, MappingConfig mappingConfig) {
-            if (mappingConfig == null || mappingConfig.getDbMapping() == null) {
-                return;
-            }
-            rdbAdapter.getRdbMapping().put(file.getName(), mappingConfig);
-            if (!mappingConfig.getDbMapping().getMirrorDb()) {
-                Map<String, MappingConfig> configMap = rdbAdapter.getMappingConfigCache()
-                    .computeIfAbsent(StringUtils.trimToEmpty(mappingConfig.getDestination()) + "."
-                                     + mappingConfig.getDbMapping().getDatabase() + "."
-                                     + mappingConfig.getDbMapping().getTable(),
-                        k1 -> new HashMap<>());
-                configMap.put(file.getName(), mappingConfig);
-            } else {
-                Map<String, MirrorDbConfig> mirrorDbConfigCache = rdbAdapter.getMirrorDbConfigCache();
-                mirrorDbConfigCache.put(StringUtils.trimToEmpty(mappingConfig.getDestination()) + "."
-                                        + mappingConfig.getDbMapping().getDatabase(),
-                    MirrorDbConfig.create(file.getName(), mappingConfig));
-            }
+        private void addConfigToCache(File file, MappingConfig config) {
+            rdbAdapter.getRdbMapping().put(file.getName(), config);
+            Map<String, MappingConfig> configMap = rdbAdapter.getMappingConfigCache()
+                .computeIfAbsent(StringUtils.trimToEmpty(config.getDestination()) + "."
+                                 + config.getDbMapping().getDatabase() + "." + config.getDbMapping().getTable(),
+                    k1 -> new HashMap<>());
+            configMap.put(file.getName(), config);
         }
 
         private void deleteConfigFromCache(File file) {
-            MappingConfig mappingConfig = rdbAdapter.getRdbMapping().remove(file.getName());
 
-            if (mappingConfig == null || mappingConfig.getDbMapping() == null) {
-                return;
-            }
-            if (!mappingConfig.getDbMapping().getMirrorDb()) {
-                for (Map<String, MappingConfig> configMap : rdbAdapter.getMappingConfigCache().values()) {
-                    if (configMap != null) {
-                        configMap.remove(file.getName());
-                    }
+            rdbAdapter.getRdbMapping().remove(file.getName());
+            for (Map<String, MappingConfig> configMap : rdbAdapter.getMappingConfigCache().values()) {
+                if (configMap != null) {
+                    configMap.remove(file.getName());
                 }
-            } else {
-                rdbAdapter.getMirrorDbConfigCache().forEach((key, mirrorDbConfig) -> {
-                    if (mirrorDbConfig.getFileName().equals(file.getName())) {
-                        rdbAdapter.getMirrorDbConfigCache().remove(key);
-                    }
-                });
             }
 
         }

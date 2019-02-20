@@ -30,7 +30,6 @@ import com.alibaba.fastsql.sql.ast.statement.SQLSelectOrderByItem;
 import com.alibaba.fastsql.sql.ast.statement.SQLTableElement;
 import com.alibaba.fastsql.sql.dialect.mysql.ast.MySqlPrimaryKey;
 import com.alibaba.fastsql.sql.dialect.mysql.ast.MySqlUnique;
-import com.alibaba.fastsql.sql.dialect.mysql.ast.expr.MySqlOrderingExpr;
 import com.alibaba.fastsql.sql.repository.Schema;
 import com.alibaba.fastsql.sql.repository.SchemaObject;
 import com.alibaba.fastsql.sql.repository.SchemaRepository;
@@ -59,7 +58,7 @@ public class MemoryTableMeta implements TableMetaTSDB {
     public boolean init(String destination) {
         return true;
     }
-
+    
     @Override
     public void destory() {
         tableMetas.clear();
@@ -75,11 +74,7 @@ public class MemoryTableMeta implements TableMetaTSDB {
             try {
                 // druid暂时flush privileges语法解析有问题
                 if (!StringUtils.startsWithIgnoreCase(StringUtils.trim(ddl), "flush")
-                    && !StringUtils.startsWithIgnoreCase(StringUtils.trim(ddl), "grant")
-                    && !StringUtils.startsWithIgnoreCase(StringUtils.trim(ddl), "create user")
-                    && !StringUtils.startsWithIgnoreCase(StringUtils.trim(ddl), "drop user")
-                    && !StringUtils.startsWithIgnoreCase(StringUtils.trim(ddl), "create database")
-                    && !StringUtils.startsWithIgnoreCase(StringUtils.trim(ddl), "drop database")) {
+                    && !StringUtils.startsWithIgnoreCase(StringUtils.trim(ddl), "grant")) {
                     repository.console(ddl);
                 }
             } catch (Throwable e) {
@@ -259,8 +254,6 @@ public class MemoryTableMeta implements TableMetaTSDB {
             return ((SQLCharExpr) sqlName).getText();
         } else if (sqlName instanceof SQLMethodInvokeExpr) {
             return DruidDdlParser.unescapeName(((SQLMethodInvokeExpr) sqlName).getMethodName());
-        } else if (sqlName instanceof MySqlOrderingExpr) {
-            return getSqlName(((MySqlOrderingExpr) sqlName).getExpr());
         } else {
             return sqlName.toString();
         }

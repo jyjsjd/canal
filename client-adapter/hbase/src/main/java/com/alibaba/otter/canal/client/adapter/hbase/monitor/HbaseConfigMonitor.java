@@ -79,10 +79,6 @@ public class HbaseConfigMonitor {
                     // 加载配置文件
                     String configContent = MappingConfigsLoader
                         .loadConfig(adapterName + File.separator + file.getName());
-                    if (configContent == null) {
-                        onFileDelete(file);
-                        return;
-                    }
                     MappingConfig config = new Yaml().loadAs(configContent, MappingConfig.class);
                     config.validate();
                     if (hbaseAdapter.getHbaseMapping().containsKey(file.getName())) {

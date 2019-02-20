@@ -26,7 +26,7 @@ public class Common {
         outerAdapterConfig.setProperties(properties);
 
         ESAdapter esAdapter = new ESAdapter();
-        esAdapter.init(outerAdapterConfig, null);
+        esAdapter.init(outerAdapterConfig);
         return esAdapter;
     }
 

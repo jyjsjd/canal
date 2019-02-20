@@ -1,17 +1,16 @@
 package com.alibaba.otter.canal.client.adapter.es;
 
 import java.net.InetAddress;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.sql.DataSource;
 
-import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.common.settings.Settings;
@@ -29,7 +28,11 @@ import com.alibaba.otter.canal.client.adapter.es.monitor.ESConfigMonitor;
 import com.alibaba.otter.canal.client.adapter.es.service.ESEtlService;
 import com.alibaba.otter.canal.client.adapter.es.service.ESSyncService;
 import com.alibaba.otter.canal.client.adapter.es.support.ESTemplate;
-import com.alibaba.otter.canal.client.adapter.support.*;
+import com.alibaba.otter.canal.client.adapter.support.DatasourceConfig;
+import com.alibaba.otter.canal.client.adapter.support.Dml;
+import com.alibaba.otter.canal.client.adapter.support.EtlResult;
+import com.alibaba.otter.canal.client.adapter.support.OuterAdapterConfig;
+import com.alibaba.otter.canal.client.adapter.support.SPI;
 
 /**
  * ES外部适配器
@@ -49,8 +52,6 @@ public class ESAdapter implements OuterAdapter {
 
     private ESConfigMonitor                        esConfigMonitor;
 
-    private Properties                             envProperties;
-
     public TransportClient getTransportClient() {
         return transportClient;
     }
@@ -68,15 +69,14 @@ public class ESAdapter implements OuterAdapter {
     }
 
     @Override
-    public void init(OuterAdapterConfig configuration, Properties envProperties) {
+    public void init(OuterAdapterConfig configuration) {
         try {
-            this.envProperties = envProperties;
-            Map<String, ESSyncConfig> esSyncConfigTmp = ESSyncConfigLoader.load(envProperties);
+            Map<String, ESSyncConfig> esSyncConfigTmp = ESSyncConfigLoader.load();
             // 过滤不匹配的key的配置
             esSyncConfigTmp.forEach((key, config) -> {
                 if ((config.getOuterAdapterKey() == null && configuration.getKey() == null)
-                    || (config.getOuterAdapterKey() != null
-                        && config.getOuterAdapterKey().equalsIgnoreCase(configuration.getKey()))) {
+                    || (config.getOuterAdapterKey() != null && config.getOuterAdapterKey()
+                        .equalsIgnoreCase(configuration.getKey()))) {
                     esSyncConfig.put(key, config);
                 }
             });
@@ -98,24 +98,15 @@ public class ESAdapter implements OuterAdapter {
                 }
                 String schema = matcher.group(2);
 
-                schemaItem.getAliasTableItems().values().forEach(tableItem -> {
-                    Map<String, ESSyncConfig> esSyncConfigMap;
-                    if (envProperties != null
-                        && !"tcp".equalsIgnoreCase(envProperties.getProperty("canal.conf.mode"))) {
-                        esSyncConfigMap = dbTableEsSyncConfig
-                            .computeIfAbsent(StringUtils.trimToEmpty(config.getDestination()) + "-"
-                                             + StringUtils.trimToEmpty(config.getGroupId()) + "_" + schema + "-"
-                                             + tableItem.getTableName(),
-                                k -> new ConcurrentHashMap<>());
-                    } else {
-                        esSyncConfigMap = dbTableEsSyncConfig
-                            .computeIfAbsent(StringUtils.trimToEmpty(config.getDestination()) + "_" + schema + "-"
-                                             + tableItem.getTableName(),
-                                k -> new ConcurrentHashMap<>());
-                    }
-
-                    esSyncConfigMap.put(configName, config);
-                });
+                schemaItem.getAliasTableItems()
+                    .values()
+                    .forEach(tableItem -> {
+                        Map<String, ESSyncConfig> esSyncConfigMap = dbTableEsSyncConfig.computeIfAbsent(schema
+                                                                                                        + "-"
+                                                                                                        + tableItem.getTableName(),
+                            k -> new HashMap<>());
+                        esSyncConfigMap.put(configName, config);
+                    });
             }
 
             Map<String, String> properties = configuration.getProperties();
@@ -140,9 +131,6 @@ public class ESAdapter implements OuterAdapter {
     }
 
     public void sync(List<Dml> dmls) {
-        if (dmls == null || dmls.isEmpty()) {
-            return;
-        }
         for (Dml dml : dmls) {
             sync(dml);
         }
@@ -151,19 +139,8 @@ public class ESAdapter implements OuterAdapter {
     public void sync(Dml dml) {
         String database = dml.getDatabase();
         String table = dml.getTable();
-        Map<String, ESSyncConfig> configMap;
-        if (envProperties != null && !"tcp".equalsIgnoreCase(envProperties.getProperty("canal.conf.mode"))) {
-            configMap = dbTableEsSyncConfig
-                .get(StringUtils.trimToEmpty(dml.getDestination()) + "-" + StringUtils.trimToEmpty(dml.getGroupId())
-                     + "_" + database + "-" + table);
-        } else {
-            configMap = dbTableEsSyncConfig
-                .get(StringUtils.trimToEmpty(dml.getDestination()) + "_" + database + "-" + table);
-        }
-
-        if (configMap != null && !configMap.values().isEmpty()) {
-            esSyncService.sync(configMap.values(), dml);
-        }
+        Map<String, ESSyncConfig> configMap = dbTableEsSyncConfig.get(database + "-" + table);
+        esSyncService.sync(configMap.values(), dml);
     }
 
     @Override
@@ -230,9 +207,6 @@ public class ESAdapter implements OuterAdapter {
 
     @Override
     public void destroy() {
-        if (esConfigMonitor != null) {
-            esConfigMonitor.destroy();
-        }
         if (transportClient != null) {
             transportClient.close();
         }
@@ -240,6 +214,10 @@ public class ESAdapter implements OuterAdapter {
 
     @Override
     public String getDestination(String task) {
+        if (esConfigMonitor != null) {
+            esConfigMonitor.destroy();
+        }
+
         ESSyncConfig config = esSyncConfig.get(task);
         if (config != null) {
             return config.getDestination();

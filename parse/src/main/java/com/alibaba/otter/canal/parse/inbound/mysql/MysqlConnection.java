@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import com.alibaba.otter.canal.parse.driver.mysql.packets.MysqlGTIDSet;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.math.NumberUtils;
 import org.slf4j.Logger;
@@ -119,7 +118,7 @@ public class MysqlConnection implements ErosaConnection {
     /**
      * 加速主备切换时的查找速度，做一些特殊优化，比如只解析事务头或者尾
      */
-    public void seek(String binlogfilename, Long binlogPosition, String gtid, SinkFunction func) throws IOException {
+    public void seek(String binlogfilename, Long binlogPosition, SinkFunction func) throws IOException {
         updateSettings();
         loadBinlogChecksum();
         sendBinlogDump(binlogfilename, binlogPosition);
@@ -131,13 +130,6 @@ public class MysqlConnection implements ErosaConnection {
         decoder.handle(LogEvent.QUERY_EVENT);
         decoder.handle(LogEvent.XID_EVENT);
         LogContext context = new LogContext();
-        // 若entry position存在gtid，则使用传入的gtid作为gtidSet 拼接的标准,否则同时开启gtid和tsdb时，会导致丢失gtid
-        // 而当源端数据库gtid 有purged时会有如下类似报错
-        // 'errno = 1236, sqlstate = HY000 errmsg = The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1 ...
-        if (StringUtils.isNotEmpty(gtid)) {
-            decoder.handle(LogEvent.GTID_LOG_EVENT);
-            context.setGtidSet(MysqlGTIDSet.parse(gtid));
-        }
         context.setFormatDescription(new FormatDescriptionLogEvent(4, binlogChecksum));
         while (fetcher.fetch()) {
             accumulateReceivedBytes(fetcher.limit());
@@ -514,14 +506,14 @@ public class MysqlConnection implements ErosaConnection {
         ResultSetPacket rs = null;
         try {
             rs = query("select @@global.binlog_checksum");
-            List<String> columnValues = rs.getFieldValues();
-            if (columnValues != null && columnValues.size() >= 1 && columnValues.get(0).toUpperCase().equals("CRC32")) {
-                binlogChecksum = LogEvent.BINLOG_CHECKSUM_ALG_CRC32;
-            } else {
-                binlogChecksum = LogEvent.BINLOG_CHECKSUM_ALG_OFF;
-            }
-        } catch (Throwable e) {
-            logger.error("", e);
+        } catch (IOException e) {
+            throw new CanalParseException(e);
+        }
+
+        List<String> columnValues = rs.getFieldValues();
+        if (columnValues != null && columnValues.size() >= 1 && columnValues.get(0).toUpperCase().equals("CRC32")) {
+            binlogChecksum = LogEvent.BINLOG_CHECKSUM_ALG_CRC32;
+        } else {
             binlogChecksum = LogEvent.BINLOG_CHECKSUM_ALG_OFF;
         }
     }

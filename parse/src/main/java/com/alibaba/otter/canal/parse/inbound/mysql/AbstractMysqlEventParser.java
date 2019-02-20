@@ -11,7 +11,6 @@ import com.alibaba.otter.canal.parse.inbound.AbstractEventParser;
 import com.alibaba.otter.canal.parse.inbound.BinlogParser;
 import com.alibaba.otter.canal.parse.inbound.MultiStageCoprocessor;
 import com.alibaba.otter.canal.parse.inbound.mysql.dbsync.LogEventConvert;
-import com.alibaba.otter.canal.parse.inbound.mysql.tsdb.DatabaseTableMeta;
 import com.alibaba.otter.canal.parse.inbound.mysql.tsdb.DefaultTableMetaTSDBFactory;
 import com.alibaba.otter.canal.parse.inbound.mysql.tsdb.TableMetaTSDB;
 import com.alibaba.otter.canal.parse.inbound.mysql.tsdb.TableMetaTSDBFactory;
@@ -65,29 +64,8 @@ public abstract class AbstractMysqlEventParser extends AbstractEventParser {
         super.setEventFilter(eventFilter);
 
         // 触发一下filter变更
-        if (eventFilter != null && eventFilter instanceof AviaterRegexFilter) {
-            if (binlogParser instanceof LogEventConvert) {
-                ((LogEventConvert) binlogParser).setNameFilter((AviaterRegexFilter) eventFilter);
-            }
-
-            if (tableMetaTSDB != null && tableMetaTSDB instanceof DatabaseTableMeta) {
-                ((DatabaseTableMeta) tableMetaTSDB).setFilter(eventFilter);
-            }
-        }
-    }
-
-    public void setEventBlackFilter(CanalEventFilter eventBlackFilter) {
-        super.setEventBlackFilter(eventBlackFilter);
-
-        // 触发一下filter变更
-        if (eventBlackFilter != null && eventBlackFilter instanceof AviaterRegexFilter) {
-            if (binlogParser instanceof LogEventConvert) {
-                ((LogEventConvert) binlogParser).setNameBlackFilter((AviaterRegexFilter) eventBlackFilter);
-            }
-
-            if (tableMetaTSDB != null && tableMetaTSDB instanceof DatabaseTableMeta) {
-                ((DatabaseTableMeta) tableMetaTSDB).setBlackFilter(eventBlackFilter);
-            }
+        if (eventFilter != null && eventFilter instanceof AviaterRegexFilter && binlogParser instanceof LogEventConvert) {
+            ((LogEventConvert) binlogParser).setNameFilter((AviaterRegexFilter) eventFilter);
         }
     }
 
@@ -135,6 +113,16 @@ public abstract class AbstractMysqlEventParser extends AbstractEventParser {
         }
 
         super.stop();
+    }
+
+    public void setEventBlackFilter(CanalEventFilter eventBlackFilter) {
+        super.setEventBlackFilter(eventBlackFilter);
+
+        // 触发一下filter变更
+        if (eventBlackFilter != null && eventBlackFilter instanceof AviaterRegexFilter
+            && binlogParser instanceof LogEventConvert) {
+            ((LogEventConvert) binlogParser).setNameBlackFilter((AviaterRegexFilter) eventBlackFilter);
+        }
     }
 
     protected MultiStageCoprocessor buildMultiStageCoprocessor() {

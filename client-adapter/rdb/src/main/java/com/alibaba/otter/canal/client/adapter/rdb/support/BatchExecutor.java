@@ -9,38 +9,37 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import javax.sql.DataSource;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * sql批量执行器
- *
- * @author rewerma 2018-11-7 下午06:45:49
- * @version 1.0.0
- */
 public class BatchExecutor implements Closeable {
 
     private static final Logger logger = LoggerFactory.getLogger(BatchExecutor.class);
 
-    private DataSource          dataSource;
+    private Integer             key;
     private Connection          conn;
     private AtomicInteger       idx    = new AtomicInteger(0);
 
-    public BatchExecutor(DataSource dataSource){
-        this.dataSource = dataSource;
+    public BatchExecutor(Connection conn){
+        this(1, conn);
+    }
+
+    public BatchExecutor(Integer key, Connection conn){
+        this.key = key;
+        this.conn = conn;
+
+        try {
+            this.conn.setAutoCommit(false);
+        } catch (SQLException e) {
+            logger.error(e.getMessage(), e);
+        }
+    }
+
+    public Integer getKey() {
+        return key;
     }
 
     public Connection getConn() {
-        if (conn == null) {
-            try {
-                conn = dataSource.getConnection();
-                this.conn.setAutoCommit(false);
-            } catch (SQLException e) {
-                logger.error(e.getMessage(), e);
-            }
-        }
         return conn;
     }
 
@@ -51,33 +50,32 @@ public class BatchExecutor implements Closeable {
         values.add(valueItem);
     }
 
-    public void execute(String sql, List<Map<String, ?>> values) throws SQLException {
-        PreparedStatement pstmt = getConn().prepareStatement(sql);
-        int len = values.size();
-        for (int i = 0; i < len; i++) {
-            int type = (Integer) values.get(i).get("type");
-            Object value = values.get(i).get("value");
-            SyncUtil.setPStmt(type, pstmt, value, i + 1);
-        }
+    public void execute(String sql, List<Map<String, ?>> values) {
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            int len = values.size();
+            for (int i = 0; i < len; i++) {
+                int type = (Integer) values.get(i).get("type");
+                Object value = values.get(i).get("value");
+                SyncUtil.setPStmt(type, pstmt, value, i + 1);
+            }
 
-        pstmt.execute();
-        idx.incrementAndGet();
+            pstmt.execute();
+            idx.incrementAndGet();
+        } catch (SQLException e) {
+            logger.error(e.getMessage(), e);
+        }
     }
 
-    public void commit() throws SQLException {
-        getConn().commit();
-        if (logger.isTraceEnabled()) {
-            logger.trace("Batch executor commit " + idx.get() + " rows");
+    public void commit() {
+        try {
+            conn.commit();
+            if (logger.isTraceEnabled()) {
+                logger.trace("Batch executor: " + key + " commit " + idx.get() + " rows");
+            }
+            idx.set(0);
+        } catch (SQLException e) {
+            logger.error(e.getMessage(), e);
         }
-        idx.set(0);
-    }
-
-    public void rollback() throws SQLException {
-        getConn().rollback();
-        if (logger.isTraceEnabled()) {
-            logger.trace("Batch executor rollback " + idx.get() + " rows");
-        }
-        idx.set(0);
     }
 
     @Override
@@ -87,8 +85,6 @@ public class BatchExecutor implements Closeable {
                 conn.close();
             } catch (SQLException e) {
                 logger.error(e.getMessage(), e);
-            } finally {
-                conn = null;
             }
         }
     }

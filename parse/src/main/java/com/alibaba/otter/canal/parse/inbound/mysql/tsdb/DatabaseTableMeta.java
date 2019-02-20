@@ -529,10 +529,9 @@ public class DatabaseTableMeta implements TableMetaTSDB {
                 return false;
             }
 
-            // if (!StringUtils.equalsIgnoreCase(sourceField.getDefaultValue(),
-            // targetField.getDefaultValue())) {
-            // return false;
-            // }
+            if (!StringUtils.equalsIgnoreCase(sourceField.getDefaultValue(), targetField.getDefaultValue())) {
+                return false;
+            }
 
             if (sourceField.isNullable() != targetField.isNullable()) {
                 return false;

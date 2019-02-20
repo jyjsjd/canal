@@ -2,8 +2,7 @@ package com.alibaba.otter.canal.adapter.launcher.loader;
 
 import java.net.SocketAddress;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 
 import com.alibaba.otter.canal.client.CanalConnector;
 import com.alibaba.otter.canal.client.CanalConnectors;
@@ -21,10 +20,10 @@ import com.alibaba.otter.canal.protocol.Message;
  */
 public class CanalAdapterWorker extends AbstractCanalAdapterWorker {
 
-    private static final int BATCH_SIZE = 50;
-    private static final int SO_TIMEOUT = 0;
+    private static final int  BATCH_SIZE = 50;
+    private static final int  SO_TIMEOUT = 0;
 
-    private CanalConnector   connector;
+    private CanalConnector    connector;
 
     /**
      * 单台client适配器worker的构造方法
@@ -59,22 +58,13 @@ public class CanalAdapterWorker extends AbstractCanalAdapterWorker {
 
     @Override
     protected void process() {
-        while (!running) { // waiting until running == true
-            while (!running) {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                }
-            }
-        }
+        while (!running)
+            ; // waiting until running == true
 
-        int retry = canalClientConfig.getRetries() == null || canalClientConfig.getRetries() == 0 ? 1 : canalClientConfig.getRetries();
-        if (retry == -1) {
-            // 重试次数-1代表异常时一直阻塞重试
-            retry = Integer.MAX_VALUE;
-        }
-        // long timeout = canalClientConfig.getTimeout() == null ? 300000 :
-        // canalClientConfig.getTimeout(); // 默认超时5分钟
+        ExecutorService workerExecutor = Executors.newSingleThreadExecutor();
+        int retry = canalClientConfig.getRetries() == null
+                    || canalClientConfig.getRetries() == 0 ? 1 : canalClientConfig.getRetries();
+        long timeout = canalClientConfig.getTimeout() == null ? 300000 : canalClientConfig.getTimeout(); // 默认超时5分钟
         Integer batchSize = canalClientConfig.getBatchSize();
         if (batchSize == null) {
             batchSize = BATCH_SIZE;
@@ -100,9 +90,6 @@ public class CanalAdapterWorker extends AbstractCanalAdapterWorker {
                     }
 
                     for (int i = 0; i < retry; i++) {
-                        if (!running) {
-                            break;
-                        }
                         Message message = connector.getWithoutAck(batchSize); // 获取指定数量的数据
                         long batchId = message.getId();
                         try {
@@ -110,19 +97,29 @@ public class CanalAdapterWorker extends AbstractCanalAdapterWorker {
                             if (batchId == -1 || size == 0) {
                                 Thread.sleep(500);
                             } else {
-                                if (logger.isDebugEnabled()) {
-                                    logger.debug("destination: {} batchId: {} batchSize: {} ",
-                                        canalDestination,
-                                        batchId,
-                                        size);
-                                }
-                                long begin = System.currentTimeMillis();
-                                writeOut(message);
-                                if (logger.isDebugEnabled()) {
-                                    logger.debug("destination: {} batchId: {} elapsed time: {} ms",
-                                        canalDestination,
-                                        batchId,
-                                        System.currentTimeMillis() - begin);
+                                Future<Boolean> future = workerExecutor.submit(() -> {
+                                    if (logger.isDebugEnabled()) {
+                                        logger.debug("destination: {} batchId: {} batchSize: {} ",
+                                            canalDestination,
+                                            batchId,
+                                            size);
+                                    }
+                                    long begin = System.currentTimeMillis();
+                                    writeOut(message);
+                                    if (logger.isDebugEnabled()) {
+                                        logger.debug("destination: {} batchId: {} elapsed time: {} ms",
+                                            canalDestination,
+                                            batchId,
+                                            System.currentTimeMillis() - begin);
+                                    }
+                                    return true;
+                                });
+
+                                try {
+                                    future.get(timeout, TimeUnit.MILLISECONDS);
+                                } catch (Exception e) {
+                                    future.cancel(true);
+                                    throw e;
                                 }
                             }
                             connector.ack(batchId); // 提交确认
@@ -130,11 +127,10 @@ public class CanalAdapterWorker extends AbstractCanalAdapterWorker {
                         } catch (Exception e) {
                             if (i != retry - 1) {
                                 connector.rollback(batchId); // 处理失败, 回滚数据
-                                logger.error(e.getMessage() + " Error sync and rollback, execute times: " + (i + 1));
                             } else {
                                 connector.ack(batchId);
-                                logger.error(e.getMessage() + " Error sync but ACK!");
                             }
+                            logger.error("sync error!", e);
                             Thread.sleep(500);
                         }
                     }
@@ -155,6 +151,8 @@ public class CanalAdapterWorker extends AbstractCanalAdapterWorker {
                 }
             }
         }
+
+        workerExecutor.shutdown();
     }
 
     @Override

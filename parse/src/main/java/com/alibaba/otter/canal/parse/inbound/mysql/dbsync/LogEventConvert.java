@@ -621,10 +621,9 @@ public class LogEventConvert extends AbstractCanalLifeCycle implements BinlogPar
                                                       + "," + columnInfo.length + " vs " + tableMeta.getFields().size());
                     }
                 }
-                // } else {
-                // logger.warn("[" + event.getTable().getDbName() + "." +
-                // event.getTable().getTableName()
-                // + "] is no primary key , skip alibaba_rds_row_id column");
+            } else {
+                logger.warn("[" + event.getTable().getDbName() + "." + event.getTable().getTableName()
+                            + "] is no primary key , skip alibaba_rds_row_id column");
             }
         }
 
@@ -635,33 +634,16 @@ public class LogEventConvert extends AbstractCanalLifeCycle implements BinlogPar
                 continue;
             }
 
-            if (existRDSNoPrimaryKey && i == columnCnt - 1 && info.type == LogEvent.MYSQL_TYPE_LONGLONG) {
-                // 不解析最后一列
-                String rdsRowIdColumnName = "#alibaba_rds_row_id#";
-                buffer.nextValue(rdsRowIdColumnName, i, info.type, info.meta, false);
-                Column.Builder columnBuilder = Column.newBuilder();
-                columnBuilder.setName(rdsRowIdColumnName);
-                columnBuilder.setIsKey(true);
-                columnBuilder.setMysqlType("bigint");
-                columnBuilder.setIndex(i);
-                columnBuilder.setIsNull(false);
-                Serializable value = buffer.getValue();
-                columnBuilder.setValue(value.toString());
-                columnBuilder.setSqlType(Types.BIGINT);
-                columnBuilder.setUpdated(false);
-
-                if (isAfter) {
-                    rowDataBuilder.addAfterColumns(columnBuilder.build());
-                } else {
-                    rowDataBuilder.addBeforeColumns(columnBuilder.build());
-                }
-                continue;
-            }
-
             FieldMeta fieldMeta = null;
             if (tableMeta != null && !tableError) {
                 // 处理file meta
                 fieldMeta = tableMeta.getFields().get(i);
+            }
+
+            if (existRDSNoPrimaryKey && i == columnCnt - 1 && info.type == LogEvent.MYSQL_TYPE_LONGLONG) {
+                // 不解析最后一列
+                buffer.nextValue(fieldMeta.getColumnName(), i, info.type, info.meta, false);
+                continue;
             }
 
             if (fieldMeta != null && existOptionalMetaData && tableMetaCache.isOnTSDB()) {
@@ -708,7 +690,7 @@ public class LogEventConvert extends AbstractCanalLifeCycle implements BinlogPar
                 }
             }
 
-            buffer.nextValue(columnBuilder.getName(), i, info.type, info.meta, isBinary);
+            buffer.nextValue(fieldMeta.getColumnName(), i, info.type, info.meta, isBinary);
             int javaType = buffer.getJavaType();
             if (buffer.isNull()) {
                 columnBuilder.setIsNull(true);
@@ -992,12 +974,10 @@ public class LogEventConvert extends AbstractCanalLifeCycle implements BinlogPar
 
     public void setNameFilter(AviaterRegexFilter nameFilter) {
         this.nameFilter = nameFilter;
-        logger.warn("--> init table filter : " + nameFilter.toString());
     }
 
     public void setNameBlackFilter(AviaterRegexFilter nameBlackFilter) {
         this.nameBlackFilter = nameBlackFilter;
-        logger.warn("--> init table black filter : " + nameBlackFilter.toString());
     }
 
     public void setTableMetaCache(TableMetaCache tableMetaCache) {
